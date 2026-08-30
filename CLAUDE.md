@@ -18,6 +18,15 @@ there is no real sync backend wired up yet.
 - Format: `gofmt -l .` / `go fmt ./...`
 - Vet: `go vet ./...`
 - Tidy deps: `go mod tidy`
+- Lint: `golangci-lint run ./...` (config: `.golangci.yml`; `golint` itself is archived/deprecated upstream, so this project uses `golangci-lint` in its place)
+- Vulnerability scan: `govulncheck ./...`
+
+## Git hooks
+
+Git hooks are managed by [husky](https://typicode.github.io/husky/) (`package.json` + `.husky/`). Run `npm install`
+once after cloning to install the pre-commit hook (`core.hooksPath` gets pointed at `.husky/_` as a side effect).
+The pre-commit hook runs `gofmt -l`, `golangci-lint run ./...`, and `govulncheck ./...`, and blocks the commit if
+any of them fail.
 
 ## Architecture
 

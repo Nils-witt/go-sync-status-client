@@ -4,13 +4,12 @@ package main
 
 import (
 	"flag"
+	"go-sync-status-client/internal/adapter/tray"
+	"go-sync-status-client/internal/infrastructure/di"
 	"log/slog"
 	"os"
 
 	"github.com/samber/do/v2"
-
-	"go-sync-status-client/internal/adapter/tray"
-	"go-sync-status-client/internal/infrastructure/di"
 )
 
 func main() {

@@ -8,6 +8,8 @@ import "time"
 // SyncState is the state a SyncSource can be in.
 type SyncState int
 
+// Sync states, in no particular rank order (see StatusService.OverallState
+// for severity ranking).
 const (
 	SyncStateUnknown SyncState = iota
 	SyncStateSynced

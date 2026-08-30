@@ -1,0 +1,11 @@
+{
+  "name": "go-sync-status-client",
+  "private": true,
+  "description": "Git hooks (via husky) for go-sync-status-client. No JS runtime code — this project is Go.",
+  "scripts": {
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7"
+  }
+}

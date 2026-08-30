@@ -3,15 +3,14 @@
 package di
 
 import (
-	"log/slog"
-	"time"
-
-	"github.com/samber/do/v2"
-
 	"go-sync-status-client/internal/adapter/repository/backuptool"
 	"go-sync-status-client/internal/adapter/tray"
 	"go-sync-status-client/internal/infrastructure/config"
 	"go-sync-status-client/internal/usecase"
+	"log/slog"
+	"time"
+
+	"github.com/samber/do/v2"
 )
 
 // New builds the application's injector with every service registered.

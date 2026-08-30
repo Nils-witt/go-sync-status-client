@@ -5,9 +5,8 @@ package usecase
 
 import (
 	"context"
-	"log/slog"
-
 	"go-sync-status-client/internal/domain"
+	"log/slog"
 )
 
 // StatusRepository is the port an adapter must satisfy to supply sync
@@ -24,6 +23,7 @@ type StatusService struct {
 	logger *slog.Logger
 }
 
+// NewStatusService creates a StatusService backed by repo.
 func NewStatusService(repo StatusRepository, logger *slog.Logger) *StatusService {
 	return &StatusService{repo: repo, logger: logger}
 }

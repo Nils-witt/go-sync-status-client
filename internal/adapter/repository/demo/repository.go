@@ -4,20 +4,21 @@ package demo
 
 import (
 	"context"
-	"time"
-
 	"go-sync-status-client/internal/domain"
 	"go-sync-status-client/internal/usecase"
+	"time"
 )
 
 // Repository is a StatusRepository backed by a static, in-memory demo
 // dataset.
 type Repository struct{}
 
+// NewRepository creates a Repository backed by static demo data.
 func NewRepository() *Repository {
 	return &Repository{}
 }
 
+// ListSources returns the fixed demo dataset.
 func (r *Repository) ListSources(_ context.Context) ([]domain.SyncSource, error) {
 	now := time.Now()
 	return []domain.SyncSource{

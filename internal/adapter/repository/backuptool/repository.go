@@ -7,13 +7,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go-sync-status-client/internal/domain"
+	"go-sync-status-client/internal/usecase"
 	"log/slog"
 	"net/http"
 	"strings"
 	"time"
-
-	"go-sync-status-client/internal/domain"
-	"go-sync-status-client/internal/usecase"
 )
 
 // Repository is a StatusRepository backed by a go-backup-tool instance's
@@ -113,7 +112,7 @@ func (r *Repository) ListSources(ctx context.Context) ([]domain.SyncSource, erro
 		r.logger.Error("backuptool: request failed", "url", url, "error", err)
 		return nil, fmt.Errorf("backuptool: request status: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		r.logger.Error("backuptool: unexpected status", "url", url, "status", resp.Status)

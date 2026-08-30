@@ -5,13 +5,12 @@ package tray
 import (
 	"context"
 	"fmt"
+	"go-sync-status-client/internal/domain"
+	"go-sync-status-client/internal/usecase"
 	"log/slog"
 	"time"
 
 	"github.com/getlantern/systray"
-
-	"go-sync-status-client/internal/domain"
-	"go-sync-status-client/internal/usecase"
 )
 
 // App renders sync status in the system tray.
@@ -139,7 +138,7 @@ func (a *App) setOverallTitle(ctx context.Context) {
 		systray.SetTitle("Sync ✕")
 		return
 	}
-	systray.SetTitle(fmt.Sprintf("Sync %s", state.Symbol()))
+	systray.SetTitle("Sync " + state.Symbol())
 	systray.SetTooltip(fmt.Sprintf("Sync Status: %s (updated %s)", state, time.Now().Format("15:04:05")))
 }
 

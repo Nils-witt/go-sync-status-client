@@ -49,7 +49,7 @@ func DefaultPath() (string, error) {
 func Load(path string) (Config, error) {
 	cfg := Config{BaseURL: defaultBaseURL, RefreshIntervalSeconds: defaultRefreshIntervalSeconds}
 
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // path is a fixed, user-supplied config location, not attacker-controlled input
 	if os.IsNotExist(err) {
 		return cfg, nil
 	}
