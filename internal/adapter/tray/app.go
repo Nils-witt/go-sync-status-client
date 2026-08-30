@@ -45,14 +45,14 @@ func (a *App) Run() {
 
 func (a *App) onReady() {
 	a.logger.Debug("tray ready")
-	systray.SetTitle("Sync")
+	systray.SetIcon(stateIcon(domain.SyncStateUnknown))
 	systray.SetTooltip("Sync Status")
 
 	ctx := context.Background()
 	sources, err := a.service.Sources(ctx)
 	if err != nil {
 		a.logger.Error("initial sources fetch failed", "error", err)
-		systray.SetTitle("Sync ✕")
+		systray.SetIcon(stateIcon(domain.SyncStateError))
 		systray.SetTooltip(fmt.Sprintf("Sync Status: %v", err))
 		return
 	}
@@ -73,7 +73,7 @@ func (a *App) onReady() {
 	a.refreshItem = systray.AddMenuItem("Refresh", "Re-check sync status")
 	a.quitItem = systray.AddMenuItem("Quit", "Quit the sync status client")
 
-	a.setOverallTitle(ctx)
+	a.setOverallIcon(ctx)
 
 	go a.handleClicks(ctx)
 }
@@ -106,7 +106,7 @@ func (a *App) refresh(ctx context.Context) {
 	sources, err := a.service.Sources(ctx)
 	if err != nil {
 		a.logger.Error("refresh sources failed", "error", err)
-		systray.SetTitle("Sync ✕")
+		systray.SetIcon(stateIcon(domain.SyncStateError))
 		systray.SetTooltip(fmt.Sprintf("Sync Status: %v", err))
 		return
 	}
@@ -128,17 +128,17 @@ func (a *App) refresh(ctx context.Context) {
 		}
 	}
 
-	a.setOverallTitle(ctx)
+	a.setOverallIcon(ctx)
 }
 
-func (a *App) setOverallTitle(ctx context.Context) {
+func (a *App) setOverallIcon(ctx context.Context) {
 	state, err := a.service.OverallState(ctx)
 	if err != nil {
 		a.logger.Error("overall state fetch failed", "error", err)
-		systray.SetTitle("Sync ✕")
+		systray.SetIcon(stateIcon(domain.SyncStateError))
 		return
 	}
-	systray.SetTitle("Sync " + state.Symbol())
+	systray.SetIcon(stateIcon(state))
 	systray.SetTooltip(fmt.Sprintf("Sync Status: %s (updated %s)", state, time.Now().Format("15:04:05")))
 }
 
