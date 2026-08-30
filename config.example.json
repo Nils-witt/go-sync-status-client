@@ -1,0 +1,5 @@
+{
+  "base_url": "http://localhost:8081",
+  "bearer_token": "",
+  "refresh_interval_seconds": 60
+}
