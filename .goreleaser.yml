@@ -1,0 +1,48 @@
+version: 2
+
+project_name: go-sync-status-client
+
+# internal/adapter/tray wraps getlantern/systray, which needs CGO on darwin
+# (Objective-C) and linux (GTK/C) -- only windows is pure Go. There is no
+# single host that can cross-compile all of that, so CI builds each
+# GOOS/GOARCH natively via `goreleaser build --single-target` on the
+# matching runner (see .github/workflows/release.yml) instead of running
+# `goreleaser release` directly.
+builds:
+  - id: go-sync-status-client
+    main: ./cmd/go-sync-status-client
+    binary: go-sync-status-client
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      # No cross GTK sysroot available in CI; add back if/when built on an
+      # arm64 linux runner.
+      - goos: linux
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .Commit }}
+
+archives:
+  - formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude: ["^docs", "^test", "^ci", "^chore", "^style"]

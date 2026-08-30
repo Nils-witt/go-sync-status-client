@@ -4,6 +4,10 @@
 
 config.json
 
+### GoReleaser
+/dist
+/release
+
 ### Node (husky)
 node_modules/
 

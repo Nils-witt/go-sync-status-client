@@ -1,0 +1,107 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build (${{ matrix.goos }}/${{ matrix.goarch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # linux needs GTK headers + a C compiler for getlantern/systray's
+          # cgo bindings, so it must build natively on a linux runner.
+          - goos: linux
+            goarch: amd64
+            runner: ubuntu-latest
+            cgo: "1"
+          # darwin needs the macOS SDK (Objective-C) for systray's cgo
+          # bindings; Xcode on macos-latest cross-compiles both arches.
+          - goos: darwin
+            goarch: amd64
+            runner: macos-latest
+            cgo: "1"
+          - goos: darwin
+            goarch: arm64
+            runner: macos-latest
+            cgo: "1"
+          # windows has no cgo in systray, so it's a pure Go cross-compile
+          # from any host.
+          - goos: windows
+            goarch: amd64
+            runner: ubuntu-latest
+            cgo: "0"
+          - goos: windows
+            goarch: arm64
+            runner: ubuntu-latest
+            cgo: "0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install GTK (linux)
+        if: matrix.goos == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libayatana-appindicator3-dev
+
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: build --single-target --clean
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: ${{ matrix.cgo }}
+
+      - name: Archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin_dir="$(find dist -mindepth 1 -maxdepth 1 -type d)"
+          name="go-sync-status-client_${GITHUB_REF_NAME}_${{ matrix.goos }}_${{ matrix.goarch }}"
+          mkdir -p release
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            (cd "$bin_dir" && zip -r "../../release/${name}.zip" .)
+          else
+            tar -C "$bin_dir" -czf "release/${name}.tar.gz" .
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: release/*
+          if-no-files-found: error
+
+  release:
+    name: release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: release
+        run: sha256sum * > checksums.txt
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true

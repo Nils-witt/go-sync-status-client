@@ -4,6 +4,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"go-sync-status-client/internal/adapter/tray"
 	"go-sync-status-client/internal/infrastructure/di"
 	"log/slog"
@@ -12,10 +13,22 @@ import (
 	"github.com/samber/do/v2"
 )
 
+// version and commit are set via -ldflags at build time (see .goreleaser.yml).
+var (
+	version = "dev"
+	commit  = "none"
+)
+
 func main() {
 	configPath := flag.String("config", "", "path to config.json (default: $XDG_CONFIG_HOME/go-sync-status-client/config.json)")
 	logLevel := flag.String("log-level", "info", "log level: debug, info, warn, error")
+	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Printf("go-sync-status-client %s (%s)\n", version, commit)
+		return
+	}
 
 	logger := newLogger(*logLevel)
 

@@ -1,0 +1,14 @@
+echo "Running gofmt..."
+unformatted=$(gofmt -l .)
+if [ -n "$unformatted" ]; then
+  echo "The following files are not gofmt-formatted:"
+  echo "$unformatted"
+  echo "Run 'gofmt -w .' (or 'golangci-lint fmt ./...') and try again."
+  exit 1
+fi
+
+echo "Running golangci-lint..."
+golangci-lint run ./... || exit 1
+
+echo "Running govulncheck..."
+govulncheck ./... || exit 1
