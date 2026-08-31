@@ -28,7 +28,7 @@ func stateIcon(state domain.SyncState) []byte {
 		return icon
 	}
 
-	icon := renderFloppyIcon(stateColor(state))
+	icon := encodeIconBytes(renderFloppyIcon(stateColor(state)))
 	iconCache[state] = icon
 	return icon
 }
