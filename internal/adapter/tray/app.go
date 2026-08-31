@@ -23,6 +23,12 @@ type App struct {
 	targetItems map[string]*systray.MenuItem
 	refreshItem *systray.MenuItem
 	quitItem    *systray.MenuItem
+
+	// sourceStates and fetchFailed track prior observations so
+	// notifySourceTransition/notifyFetchFailure/notifyFetchRecovered can
+	// detect state changes worth a desktop notification.
+	sourceStates map[string]domain.SyncState
+	fetchFailed  bool
 }
 
 // NewApp builds the tray app. refreshInterval is how often sync status is
@@ -35,6 +41,7 @@ func NewApp(service *usecase.StatusService, logger *slog.Logger, refreshInterval
 		refreshInterval: refreshInterval,
 		sourceItems:     make(map[string]*systray.MenuItem),
 		targetItems:     make(map[string]*systray.MenuItem),
+		sourceStates:    make(map[string]domain.SyncState),
 	}
 }
 
@@ -54,6 +61,7 @@ func (a *App) onReady() {
 		a.logger.Error("initial sources fetch failed", "error", err)
 		systray.SetIcon(stateIcon(domain.SyncStateError))
 		systray.SetTooltip(fmt.Sprintf("Sync Status: %v", err))
+		a.notifyFetchFailure(err)
 		return
 	}
 
@@ -61,6 +69,7 @@ func (a *App) onReady() {
 		item := systray.AddMenuItem(menuLabel(src), src.Detail)
 		// item.Disable() // informational row, not an action
 		a.sourceItems[src.ID] = item
+		a.sourceStates[src.ID] = src.State
 
 		for _, tgt := range src.Targets {
 			sub := item.AddSubMenuItem(targetLabel(tgt), "")
@@ -108,10 +117,14 @@ func (a *App) refresh(ctx context.Context) {
 		a.logger.Error("refresh sources failed", "error", err)
 		systray.SetIcon(stateIcon(domain.SyncStateError))
 		systray.SetTooltip(fmt.Sprintf("Sync Status: %v", err))
+		a.notifyFetchFailure(err)
 		return
 	}
+	a.notifyFetchRecovered()
 
 	for _, src := range sources {
+		a.notifySourceTransition(src)
+
 		item, ok := a.sourceItems[src.ID]
 		if !ok {
 			continue

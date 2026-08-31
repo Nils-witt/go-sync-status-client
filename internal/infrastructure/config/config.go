@@ -42,29 +42,45 @@ func DefaultPath() (string, error) {
 	return filepath.Join(dir, "go-sync-status-client", "config.json"), nil
 }
 
-// Load reads configuration from path. A missing file is not an error — it
-// yields a Config with just the default base URL, so the tray can still
-// run against an unauthenticated local instance with no config file at
-// all.
+// Load reads configuration from path. A missing file is not an error: on
+// Windows, it falls back to values provisioned in the registry (see
+// loadFromRegistry), which lets managed deployments push config without
+// writing a per-user file; on other platforms, and when no registry values
+// are present either, it yields a Config with just the defaults, so the
+// tray can still run against an unauthenticated local instance with no
+// config file at all.
 func Load(path string) (Config, error) {
-	cfg := Config{BaseURL: defaultBaseURL, RefreshIntervalSeconds: defaultRefreshIntervalSeconds}
-
 	data, err := os.ReadFile(path) //nolint:gosec // path is a fixed, user-supplied config location, not attacker-controlled input
 	if os.IsNotExist(err) {
-		return cfg, nil
+		cfg, ok, err := loadFromRegistry()
+		if err != nil {
+			return Config{}, err
+		}
+		if !ok {
+			cfg = Config{}
+		}
+		return applyDefaults(cfg), nil
 	}
 	if err != nil {
 		return Config{}, fmt.Errorf("config: read %s: %w", path, err)
 	}
 
+	var cfg Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return Config{}, fmt.Errorf("config: parse %s: %w", path, err)
 	}
+	return applyDefaults(cfg), nil
+}
+
+// applyDefaults fills in defaultBaseURL/defaultRefreshIntervalSeconds for
+// any field cfg left unset, regardless of whether cfg came from the JSON
+// file or the Windows registry.
+func applyDefaults(cfg Config) Config {
 	if cfg.BaseURL == "" {
 		cfg.BaseURL = defaultBaseURL
 	}
 	if cfg.RefreshIntervalSeconds <= 0 {
 		cfg.RefreshIntervalSeconds = defaultRefreshIntervalSeconds
 	}
-	return cfg, nil
+	return cfg
 }
