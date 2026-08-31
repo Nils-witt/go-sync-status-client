@@ -33,7 +33,7 @@ func New(configPath string, logger *slog.Logger) *do.RootScope {
 				return config.Config{}, err
 			}
 		}
-		logger.Debug("loading config", "path", path)
+		logger.Info("loading config", "path", path)
 		return config.Load(path)
 	})
 
