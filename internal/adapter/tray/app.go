@@ -160,7 +160,16 @@ func (a *App) onExit() {
 }
 
 func menuLabel(src domain.SyncSource) string {
-	return fmt.Sprintf("%s %s — %s", src.State.Symbol(), src.Name, src.State)
+	return fmt.Sprintf("%s %s — %s (last run %s)", src.State.Symbol(), src.Name, src.State, formatLastRun(src.UpdatedAt))
+}
+
+// formatLastRun renders a source's UpdatedAt for display in a menu label.
+// A zero time means the source has never run.
+func formatLastRun(t time.Time) string {
+	if t.IsZero() {
+		return "never"
+	}
+	return t.Format("15:04:05")
 }
 
 func targetLabel(tgt domain.SyncTarget) string {
