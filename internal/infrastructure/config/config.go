@@ -5,6 +5,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 )
@@ -49,10 +50,11 @@ func DefaultPath() (string, error) {
 // are present either, it yields a Config with just the defaults, so the
 // tray can still run against an unauthenticated local instance with no
 // config file at all.
-func Load(path string) (Config, error) {
+func Load(path string, logger *slog.Logger) (Config, error) {
 	data, err := os.ReadFile(path) //nolint:gosec // path is a fixed, user-supplied config location, not attacker-controlled input
 	if os.IsNotExist(err) {
-		cfg, ok, err := loadFromRegistry()
+		logger.Warn("config: config file does not exist", "path", path)
+		cfg, ok, err := loadFromRegistry(logger)
 		if err != nil {
 			return Config{}, err
 		}

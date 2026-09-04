@@ -15,7 +15,6 @@ builds:
     env:
       - CGO_ENABLED=1
     goos:
-      - linux
       - darwin
       - windows
     goarch:
@@ -31,6 +30,14 @@ builds:
       - -X main.version={{ .Version }}
       - -X main.commit={{ .Commit }}
 
+    overrides:
+      - goos: windows
+        goarch: amd64
+        ldflags:
+          - -H=windowsgui
+          - -s -w
+          - -X main.version={{ .Version }}
+          - -X main.commit={{ .Commit }}
 archives:
   - formats: [tar.gz]
     name_template: >-

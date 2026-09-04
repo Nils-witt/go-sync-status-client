@@ -5,6 +5,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 
 	"golang.org/x/sys/windows/registry"
@@ -17,21 +18,24 @@ import (
 const registryKeyPath = `Software\go-sync-status-client`
 
 // loadFromRegistry reads Config values from
-// HKEY_CURRENT_USER\Software\go-sync-status-client. ok is false (with a nil
+// HKEY_CURRENT_MACHINE\Software\go-sync-status-client. ok is false (with a nil
 // error) when the key itself doesn't exist, so Load can fall back to
 // defaults; a missing individual value within an existing key is likewise
 // left zero-valued rather than treated as an error. Any other failure to
 // read the key is returned as an error.
-func loadFromRegistry() (cfg Config, ok bool, err error) {
-	key, err := registry.OpenKey(registry.CURRENT_USER, registryKeyPath, registry.QUERY_VALUE)
+func loadFromRegistry(logger *slog.Logger) (cfg Config, ok bool, err error) {
+	logger.Info("config: loading from registry key", "key", registryKeyPath)
+	key, err := registry.OpenKey(registry.LOCAL_MACHINE, registryKeyPath, registry.QUERY_VALUE)
 	if err != nil {
 		if errors.Is(err, registry.ErrNotExist) {
 			return Config{}, false, nil
 		}
 		return Config{}, false, fmt.Errorf("config: open registry key %s: %w", registryKeyPath, err)
 	}
+	logger.Info("config: loaded from registry key", "key", registryKeyPath)
 	defer func() { _ = key.Close() }()
 
+	logger.Info("config: parsing registry values")
 	if v, _, err := key.GetStringValue("BaseURL"); err == nil {
 		cfg.BaseURL = v
 	}

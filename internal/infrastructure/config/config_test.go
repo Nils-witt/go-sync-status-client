@@ -1,13 +1,17 @@
 package config
 
 import (
+	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
+var testLogger = slog.New(slog.NewTextHandler(io.Discard, nil))
+
 func TestLoad_MissingFileUsesDefaults(t *testing.T) {
-	cfg, err := Load(filepath.Join(t.TempDir(), "does-not-exist.json"))
+	cfg, err := Load(filepath.Join(t.TempDir(), "does-not-exist.json"), testLogger)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -23,7 +27,7 @@ func TestLoad_FilePresentOverridesDefaults(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	writeFile(t, path, `{"base_url":"http://example.com","bearer_token":"tok","refresh_interval_seconds":5}`)
 
-	cfg, err := Load(path)
+	cfg, err := Load(path, testLogger)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -36,7 +40,7 @@ func TestLoad_FilePresentButEmptyFieldsFallBackToDefaults(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	writeFile(t, path, `{"refresh_interval_seconds":0}`)
 
-	cfg, err := Load(path)
+	cfg, err := Load(path, testLogger)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}

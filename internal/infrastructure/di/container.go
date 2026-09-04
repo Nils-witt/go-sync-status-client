@@ -34,7 +34,7 @@ func New(configPath string, logger *slog.Logger) *do.RootScope {
 			}
 		}
 		logger.Info("loading config", "path", path)
-		return config.Load(path)
+		return config.Load(path, logger)
 	})
 
 	do.Provide(injector, func(i do.Injector) (usecase.StatusRepository, error) {
