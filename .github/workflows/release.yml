@@ -16,12 +16,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # linux needs GTK headers + a C compiler for getlantern/systray's
-          # cgo bindings, so it must build natively on a linux runner.
-          - goos: linux
-            goarch: amd64
-            runner: ubuntu-latest
-            cgo: "1"
           # darwin needs the macOS SDK (Objective-C) for systray's cgo
           # bindings; Xcode on macos-latest cross-compiles both arches.
           - goos: darwin
