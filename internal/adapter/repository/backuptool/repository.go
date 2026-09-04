@@ -138,6 +138,12 @@ func toSyncSource(j jobSnapshot) domain.SyncSource {
 	if updatedAt.IsZero() {
 		updatedAt = j.LastStart
 	}
+	// The API returns timestamps in whatever zone the server encodes (e.g.
+	// UTC via a trailing "Z"); convert to local so menu labels show the
+	// user's own wall-clock time rather than the server's.
+	if !updatedAt.IsZero() {
+		updatedAt = updatedAt.Local()
+	}
 
 	targets := make([]domain.SyncTarget, 0, len(j.Targets))
 	for _, t := range j.Targets {
