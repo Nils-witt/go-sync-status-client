@@ -9,7 +9,6 @@ import (
 	"go-sync-status-client/internal/domain"
 	"go-sync-status-client/internal/usecase"
 	"log/slog"
-	"sync"
 )
 
 // Entry is one named child repository to fan out to.
@@ -37,22 +36,9 @@ func NewRepository(logger *slog.Logger, entries ...Entry) *Repository {
 // contributes a single synthetic error source instead, so the rest of the
 // servers' sources are still returned.
 func (r *Repository) ListSources(ctx context.Context) ([]domain.SyncSource, error) {
-	results := make([][]domain.SyncSource, len(r.entries))
-
-	var wg sync.WaitGroup
-	for i, entry := range r.entries {
-		wg.Add(1)
-		go func(i int, entry Entry) {
-			defer wg.Done()
-			results[i] = r.fetch(ctx, entry)
-		}(i, entry)
-	}
-	wg.Wait()
-
-	var sources []domain.SyncSource
-	for _, r := range results {
-		sources = append(sources, r...)
-	}
+	sources := fanOut(r.entries, func(entry Entry) []domain.SyncSource {
+		return r.fetch(ctx, entry)
+	})
 	return sources, nil
 }
 

@@ -21,10 +21,17 @@ func (s stubRepo) ListSources(_ context.Context) ([]domain.SyncSource, error) {
 
 var testLogger = slog.New(slog.NewTextHandler(io.Discard, nil))
 
+// testServerOne and testServerTwo name the two servers used across this
+// package's tests (both TestListSources_* and TestListReceivers_*).
+const (
+	testServerOne = "one"
+	testServerTwo = "two"
+)
+
 func TestListSources_TagsAndQualifiesIDs(t *testing.T) {
 	repo := NewRepository(testLogger,
-		Entry{Name: "one", Repo: stubRepo{sources: []domain.SyncSource{{ID: "docs", Name: "Docs"}}}},
-		Entry{Name: "two", Repo: stubRepo{sources: []domain.SyncSource{{ID: "docs", Name: "Docs"}}}},
+		Entry{Name: testServerOne, Repo: stubRepo{sources: []domain.SyncSource{{ID: "docs", Name: "Docs"}}}},
+		Entry{Name: testServerTwo, Repo: stubRepo{sources: []domain.SyncSource{{ID: "docs", Name: "Docs"}}}},
 	)
 
 	sources, err := repo.ListSources(context.Background())

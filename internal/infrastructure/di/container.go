@@ -14,6 +14,16 @@ import (
 	"github.com/samber/do/v2"
 )
 
+// backuptoolServer pairs a configured server's name with the
+// backuptool.Repository that talks to it. backuptool.Repository satisfies
+// both usecase.StatusRepository and usecase.ReceiverRepository, so sources
+// and receivers share the same per-server HTTP client instead of each
+// constructing their own.
+type backuptoolServer struct {
+	name string
+	repo *backuptool.Repository
+}
+
 // New builds the application's injector with every service registered.
 // configPath is the config.json location to load; an empty string falls
 // back to config.DefaultPath(). logger is registered as a value so any
@@ -38,18 +48,29 @@ func New(configPath string, logger *slog.Logger) *do.RootScope {
 		return config.Load(path, logger)
 	})
 
-	do.Provide(injector, func(i do.Injector) (usecase.StatusRepository, error) {
+	do.Provide(injector, func(i do.Injector) ([]backuptoolServer, error) {
 		logger := do.MustInvoke[*slog.Logger](i)
 		cfg := do.MustInvoke[config.Config](i)
 
-		entries := make([]multi.Entry, 0, len(cfg.Servers))
+		servers := make([]backuptoolServer, 0, len(cfg.Servers))
 		for _, sc := range cfg.Servers {
 			opts := []backuptool.Option{backuptool.WithLogger(logger)}
 			if sc.BearerToken != "" {
 				opts = append(opts, backuptool.WithBearerToken(sc.BearerToken))
 			}
 			logger.Info("using backuptool repository", "server", sc.Name, "base_url", sc.BaseURL)
-			entries = append(entries, multi.Entry{Name: sc.Name, Repo: backuptool.NewRepository(sc.BaseURL, opts...)})
+			servers = append(servers, backuptoolServer{name: sc.Name, repo: backuptool.NewRepository(sc.BaseURL, opts...)})
+		}
+		return servers, nil
+	})
+
+	do.Provide(injector, func(i do.Injector) (usecase.StatusRepository, error) {
+		logger := do.MustInvoke[*slog.Logger](i)
+		servers := do.MustInvoke[[]backuptoolServer](i)
+
+		entries := make([]multi.Entry, 0, len(servers))
+		for _, s := range servers {
+			entries = append(entries, multi.Entry{Name: s.name, Repo: s.repo})
 		}
 		return multi.NewRepository(logger, entries...), nil
 	})
@@ -60,12 +81,30 @@ func New(configPath string, logger *slog.Logger) *do.RootScope {
 		return usecase.NewStatusService(repo, logger), nil
 	})
 
+	do.Provide(injector, func(i do.Injector) (usecase.ReceiverRepository, error) {
+		logger := do.MustInvoke[*slog.Logger](i)
+		servers := do.MustInvoke[[]backuptoolServer](i)
+
+		entries := make([]multi.ReceiverEntry, 0, len(servers))
+		for _, s := range servers {
+			entries = append(entries, multi.ReceiverEntry{Name: s.name, Repo: s.repo})
+		}
+		return multi.NewReceiverRepository(logger, entries...), nil
+	})
+
+	do.Provide(injector, func(i do.Injector) (*usecase.ReceiverService, error) {
+		repo := do.MustInvoke[usecase.ReceiverRepository](i)
+		logger := do.MustInvoke[*slog.Logger](i)
+		return usecase.NewReceiverService(repo, logger), nil
+	})
+
 	do.Provide(injector, func(i do.Injector) (*tray.App, error) {
 		service := do.MustInvoke[*usecase.StatusService](i)
+		receiverService := do.MustInvoke[*usecase.ReceiverService](i)
 		logger := do.MustInvoke[*slog.Logger](i)
 		cfg := do.MustInvoke[config.Config](i)
 		refreshInterval := time.Duration(cfg.RefreshIntervalSeconds) * time.Second
-		return tray.NewApp(service, logger, refreshInterval), nil
+		return tray.NewApp(service, receiverService, logger, refreshInterval), nil
 	})
 
 	return injector

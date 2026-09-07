@@ -16,13 +16,15 @@ import (
 // App renders sync status in the system tray.
 type App struct {
 	service         *usecase.StatusService
+	receiverService *usecase.ReceiverService
 	logger          *slog.Logger
 	refreshInterval time.Duration
 
-	sourceItems map[string]*systray.MenuItem
-	targetItems map[string]*systray.MenuItem
-	refreshItem *systray.MenuItem
-	quitItem    *systray.MenuItem
+	sourceItems   map[string]*systray.MenuItem
+	targetItems   map[string]*systray.MenuItem
+	receiverItems map[string]*systray.MenuItem
+	refreshItem   *systray.MenuItem
+	quitItem      *systray.MenuItem
 
 	// sourceStates and fetchFailed track prior observations so
 	// notifySourceTransition/notifyFetchFailure/notifyFetchRecovered can
@@ -34,13 +36,15 @@ type App struct {
 // NewApp builds the tray app. refreshInterval is how often sync status is
 // automatically re-checked; a non-positive value disables auto refresh, so
 // status only updates when the user clicks Refresh.
-func NewApp(service *usecase.StatusService, logger *slog.Logger, refreshInterval time.Duration) *App {
+func NewApp(service *usecase.StatusService, receiverService *usecase.ReceiverService, logger *slog.Logger, refreshInterval time.Duration) *App {
 	return &App{
 		service:         service,
+		receiverService: receiverService,
 		logger:          logger,
 		refreshInterval: refreshInterval,
 		sourceItems:     make(map[string]*systray.MenuItem),
 		targetItems:     make(map[string]*systray.MenuItem),
+		receiverItems:   make(map[string]*systray.MenuItem),
 		sourceStates:    make(map[string]domain.SyncState),
 	}
 }
@@ -80,6 +84,8 @@ func (a *App) onReady() {
 			a.targetItems[targetKey(src.ID, tgt.ID)] = sub
 		}
 	}
+
+	a.addReceiverSection(ctx)
 
 	systray.AddSeparator()
 	a.refreshItem = systray.AddMenuItem("Refresh", "Re-check sync status")
@@ -144,6 +150,8 @@ func (a *App) refresh(ctx context.Context) {
 			sub.SetTitle(targetLabel(tgt))
 		}
 	}
+
+	a.refreshReceiverSection(ctx)
 
 	a.setOverallIcon(sources)
 }
