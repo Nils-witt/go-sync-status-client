@@ -6,27 +6,41 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"path/filepath"
 )
 
-// defaultBaseURL is used when the config file is missing, or present but
-// leaves base_url empty.
+// defaultBaseURL is used for the implicit server created when no servers
+// are configured (missing config file, or a present-but-empty "servers"
+// list).
 const defaultBaseURL = "http://localhost:8081"
 
 // defaultRefreshIntervalSeconds is used when the config file is missing, or
 // present but leaves refresh_interval_seconds unset or non-positive.
 const defaultRefreshIntervalSeconds = 60
 
-// Config holds the settings needed to reach the go-backup-tool dashboard
-// API.
-type Config struct {
+// ServerConfig identifies one go-backup-tool dashboard instance to fetch
+// sync status from.
+type ServerConfig struct {
+	// Name labels this server in the tray UI and in logs. If left empty, it
+	// is derived from BaseURL's host.
+	Name string `json:"name"`
 	// BaseURL is the go-backup-tool instance's dashboard address, e.g.
 	// "http://localhost:8081".
 	BaseURL string `json:"base_url"`
 	// BearerToken authenticates dashboard requests. Only required when the
 	// target instance has webui.username or OIDC configured.
 	BearerToken string `json:"bearer_token"`
+}
+
+// Config holds the settings needed to reach one or more go-backup-tool
+// dashboard APIs.
+type Config struct {
+	// Servers lists every go-backup-tool instance to fetch sync status
+	// from. If empty, a single implicit server pointing at defaultBaseURL
+	// is used.
+	Servers []ServerConfig `json:"servers"`
 	// RefreshIntervalSeconds is how often the tray automatically re-checks
 	// sync status, in seconds.
 	RefreshIntervalSeconds int `json:"refresh_interval_seconds"`
@@ -74,15 +88,51 @@ func Load(path string, logger *slog.Logger) (Config, error) {
 	return applyDefaults(cfg), nil
 }
 
-// applyDefaults fills in defaultBaseURL/defaultRefreshIntervalSeconds for
-// any field cfg left unset, regardless of whether cfg came from the JSON
-// file or the Windows registry.
+// applyDefaults fills in defaults for any field cfg left unset, regardless
+// of whether cfg came from the JSON file or the Windows registry.
 func applyDefaults(cfg Config) Config {
-	if cfg.BaseURL == "" {
-		cfg.BaseURL = defaultBaseURL
+	if len(cfg.Servers) == 0 {
+		cfg.Servers = []ServerConfig{{Name: "default", BaseURL: defaultBaseURL}}
 	}
+	cfg.Servers = applyServerDefaults(cfg.Servers)
 	if cfg.RefreshIntervalSeconds <= 0 {
 		cfg.RefreshIntervalSeconds = defaultRefreshIntervalSeconds
 	}
 	return cfg
+}
+
+// applyServerDefaults fills in a missing BaseURL/Name for each server and
+// deduplicates names, so every server is always safe to use as a map key
+// or display prefix without a hard config-validation error.
+func applyServerDefaults(servers []ServerConfig) []ServerConfig {
+	seen := make(map[string]int, len(servers))
+	result := make([]ServerConfig, len(servers))
+	for i, sc := range servers {
+		if sc.BaseURL == "" {
+			sc.BaseURL = defaultBaseURL
+		}
+		if sc.Name == "" {
+			sc.Name = hostOf(sc.BaseURL)
+			if sc.Name == "" {
+				sc.Name = fmt.Sprintf("server-%d", i+1)
+			}
+		}
+		if n := seen[sc.Name]; n > 0 {
+			seen[sc.Name] = n + 1
+			sc.Name = fmt.Sprintf("%s-%d", sc.Name, n+1)
+		} else {
+			seen[sc.Name] = 1
+		}
+		result[i] = sc
+	}
+	return result
+}
+
+// hostOf returns baseURL's host, or "" if it can't be parsed or has none.
+func hostOf(baseURL string) string {
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		return ""
+	}
+	return u.Host
 }

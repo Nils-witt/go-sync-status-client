@@ -4,6 +4,7 @@ package di
 
 import (
 	"go-sync-status-client/internal/adapter/repository/backuptool"
+	"go-sync-status-client/internal/adapter/repository/multi"
 	"go-sync-status-client/internal/adapter/tray"
 	"go-sync-status-client/internal/infrastructure/config"
 	"go-sync-status-client/internal/usecase"
@@ -41,12 +42,16 @@ func New(configPath string, logger *slog.Logger) *do.RootScope {
 		logger := do.MustInvoke[*slog.Logger](i)
 		cfg := do.MustInvoke[config.Config](i)
 
-		opts := []backuptool.Option{backuptool.WithLogger(logger)}
-		if cfg.BearerToken != "" {
-			opts = append(opts, backuptool.WithBearerToken(cfg.BearerToken))
+		entries := make([]multi.Entry, 0, len(cfg.Servers))
+		for _, sc := range cfg.Servers {
+			opts := []backuptool.Option{backuptool.WithLogger(logger)}
+			if sc.BearerToken != "" {
+				opts = append(opts, backuptool.WithBearerToken(sc.BearerToken))
+			}
+			logger.Info("using backuptool repository", "server", sc.Name, "base_url", sc.BaseURL)
+			entries = append(entries, multi.Entry{Name: sc.Name, Repo: backuptool.NewRepository(sc.BaseURL, opts...)})
 		}
-		logger.Info("using backuptool repository", "base_url", cfg.BaseURL)
-		return backuptool.NewRepository(cfg.BaseURL, opts...), nil
+		return multi.NewRepository(logger, entries...), nil
 	})
 
 	do.Provide(injector, func(i do.Injector) (*usecase.StatusService, error) {

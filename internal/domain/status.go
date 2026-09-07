@@ -52,12 +52,16 @@ func (s SyncState) Symbol() string {
 // SyncSource is a single item being kept in sync (a folder, a library, a
 // remote endpoint, ...).
 type SyncSource struct {
-	ID        string
-	Name      string
-	State     SyncState
-	Detail    string
-	UpdatedAt time.Time
-	Targets   []SyncTarget
+	ID   string
+	Name string
+	// ServerName identifies which configured server this source came from.
+	// Populated by a multi-server-aware repository; empty when there's
+	// only one implicit source.
+	ServerName string
+	State      SyncState
+	Detail     string
+	UpdatedAt  time.Time
+	Targets    []SyncTarget
 }
 
 // SyncTarget is one destination a SyncSource replicates to (e.g. a specific

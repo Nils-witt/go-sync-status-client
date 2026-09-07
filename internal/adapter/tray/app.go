@@ -57,6 +57,7 @@ func (a *App) onReady() {
 
 	ctx := context.Background()
 	sources, err := a.service.Sources(ctx)
+	a.logger.Info("initial sources fetch", "count", sources, "error", err)
 	if err != nil {
 		a.logger.Error("initial sources fetch failed", "error", err)
 		systray.SetIcon(stateIcon(domain.SyncStateError))
@@ -65,8 +66,10 @@ func (a *App) onReady() {
 		return
 	}
 
+	multi := multiServer(sources)
+	a.logger.Info("initial sources fetch", "count", len(sources), "multi_server", multi)
 	for _, src := range sources {
-		item := systray.AddMenuItem(menuLabel(src), src.Detail)
+		item := systray.AddMenuItem(menuLabel(src, multi), src.Detail)
 		// item.Disable() // informational row, not an action
 		a.sourceItems[src.ID] = item
 		a.sourceStates[src.ID] = src.State
@@ -82,7 +85,7 @@ func (a *App) onReady() {
 	a.refreshItem = systray.AddMenuItem("Refresh", "Re-check sync status")
 	a.quitItem = systray.AddMenuItem("Quit", "Quit the sync status client")
 
-	a.setOverallIcon(ctx)
+	a.setOverallIcon(sources)
 
 	go a.handleClicks(ctx)
 }
@@ -122,14 +125,15 @@ func (a *App) refresh(ctx context.Context) {
 	}
 	a.notifyFetchRecovered()
 
+	multi := multiServer(sources)
 	for _, src := range sources {
-		a.notifySourceTransition(src)
+		a.notifySourceTransition(src, multi)
 
 		item, ok := a.sourceItems[src.ID]
 		if !ok {
 			continue
 		}
-		item.SetTitle(menuLabel(src))
+		item.SetTitle(menuLabel(src, multi))
 		item.SetTooltip(src.Detail)
 
 		for _, tgt := range src.Targets {
@@ -141,16 +145,11 @@ func (a *App) refresh(ctx context.Context) {
 		}
 	}
 
-	a.setOverallIcon(ctx)
+	a.setOverallIcon(sources)
 }
 
-func (a *App) setOverallIcon(ctx context.Context) {
-	state, err := a.service.OverallState(ctx)
-	if err != nil {
-		a.logger.Error("overall state fetch failed", "error", err)
-		systray.SetIcon(stateIcon(domain.SyncStateError))
-		return
-	}
+func (a *App) setOverallIcon(sources []domain.SyncSource) {
+	state := usecase.OverallStateOf(sources)
 	systray.SetIcon(stateIcon(state))
 	systray.SetTooltip(fmt.Sprintf("Sync Status: %s (updated %s)", state, time.Now().Format("15:04:05")))
 }
@@ -159,8 +158,32 @@ func (a *App) onExit() {
 	a.logger.Info("tray exited")
 }
 
-func menuLabel(src domain.SyncSource) string {
-	return fmt.Sprintf("%s %s — %s (last run %s)", src.State.Symbol(), src.Name, src.State, formatLastRun(src.UpdatedAt))
+// multiServer reports whether sources span more than one distinct
+// ServerName, in which case labels should be prefixed with their origin
+// server to disambiguate them.
+func multiServer(sources []domain.SyncSource) bool {
+	names := make(map[string]struct{}, len(sources))
+	for _, src := range sources {
+		names[src.ServerName] = struct{}{}
+		if len(names) > 1 {
+			return true
+		}
+	}
+	return false
+}
+
+// displayName returns src's name, prefixed with its server when multi is
+// true (i.e. more than one server is configured); a single-server setup
+// renders exactly as it did before server support was added.
+func displayName(src domain.SyncSource, multi bool) string {
+	if multi && src.ServerName != "" {
+		return src.ServerName + ": " + src.Name
+	}
+	return src.Name
+}
+
+func menuLabel(src domain.SyncSource, multi bool) string {
+	return fmt.Sprintf("%s %s — %s (last run %s)", src.State.Symbol(), displayName(src, multi), src.State, formatLastRun(src.UpdatedAt))
 }
 
 // formatLastRun renders a source's UpdatedAt for display in a menu label.

@@ -47,8 +47,17 @@ func (s *StatusService) OverallState(ctx context.Context) (domain.SyncState, err
 		s.logger.Error("list sources failed", "error", err)
 		return domain.SyncStateUnknown, err
 	}
+	return OverallStateOf(sources), nil
+}
+
+// OverallStateOf reduces sources to a single worst-case state, suitable for
+// a tray icon summary: Error beats Syncing beats Paused beats Synced.
+// Exposed as a pure function so callers that already fetched sources (e.g.
+// the tray, once per refresh) don't need a second ListSources round trip
+// just to derive the overall state.
+func OverallStateOf(sources []domain.SyncSource) domain.SyncState {
 	if len(sources) == 0 {
-		return domain.SyncStateUnknown, nil
+		return domain.SyncStateUnknown
 	}
 
 	rank := func(s domain.SyncState) int {
@@ -72,5 +81,5 @@ func (s *StatusService) OverallState(ctx context.Context) (domain.SyncState, err
 			worst = src.State
 		}
 	}
-	return worst, nil
+	return worst
 }

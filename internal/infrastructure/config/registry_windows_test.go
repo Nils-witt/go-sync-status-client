@@ -29,11 +29,11 @@ func TestLoad_MissingFileFallsBackToRegistry(t *testing.T) {
 		t.Fatalf("SetDWordValue RefreshIntervalSeconds: %v", err)
 	}
 
-	cfg, err := Load(filepath.Join(t.TempDir(), "does-not-exist.json"))
+	cfg, err := Load(filepath.Join(t.TempDir(), "does-not-exist.json"), testLogger)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.BaseURL != "http://registry.example.com" || cfg.BearerToken != "reg-tok" || cfg.RefreshIntervalSeconds != 42 {
+	if len(cfg.Servers) != 1 || cfg.Servers[0].BaseURL != "http://registry.example.com" || cfg.Servers[0].BearerToken != "reg-tok" || cfg.RefreshIntervalSeconds != 42 {
 		t.Errorf("Load() = %+v, want values from registry", cfg)
 	}
 }
@@ -41,12 +41,12 @@ func TestLoad_MissingFileFallsBackToRegistry(t *testing.T) {
 func TestLoad_MissingFileAndRegistryKeyUsesDefaults(t *testing.T) {
 	_ = registry.DeleteKey(registry.CURRENT_USER, registryKeyPath)
 
-	cfg, err := Load(filepath.Join(t.TempDir(), "does-not-exist.json"))
+	cfg, err := Load(filepath.Join(t.TempDir(), "does-not-exist.json"), testLogger)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.BaseURL != defaultBaseURL {
-		t.Errorf("BaseURL = %q, want %q", cfg.BaseURL, defaultBaseURL)
+	if len(cfg.Servers) != 1 || cfg.Servers[0].BaseURL != defaultBaseURL {
+		t.Errorf("Servers = %+v, want default BaseURL %q", cfg.Servers, defaultBaseURL)
 	}
 	if cfg.RefreshIntervalSeconds != defaultRefreshIntervalSeconds {
 		t.Errorf("RefreshIntervalSeconds = %d, want %d", cfg.RefreshIntervalSeconds, defaultRefreshIntervalSeconds)

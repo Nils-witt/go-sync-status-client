@@ -36,11 +36,15 @@ func loadFromRegistry(logger *slog.Logger) (cfg Config, ok bool, err error) {
 	defer func() { _ = key.Close() }()
 
 	logger.Info("config: parsing registry values")
+	var sc ServerConfig
 	if v, _, err := key.GetStringValue("BaseURL"); err == nil {
-		cfg.BaseURL = v
+		sc.BaseURL = v
 	}
 	if v, _, err := key.GetStringValue("BearerToken"); err == nil {
-		cfg.BearerToken = v
+		sc.BearerToken = v
+	}
+	if sc != (ServerConfig{}) {
+		cfg.Servers = []ServerConfig{sc}
 	}
 	if v, _, err := key.GetIntegerValue("RefreshIntervalSeconds"); err == nil && v <= math.MaxInt32 {
 		cfg.RefreshIntervalSeconds = int(v)

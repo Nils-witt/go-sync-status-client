@@ -40,16 +40,18 @@ func classifyTransition(known bool, prev, cur domain.SyncState) transitionKind {
 }
 
 // notifySourceTransition updates the tracked state for src and, if it just
-// entered or left the Error state, sends a desktop notification.
-func (a *App) notifySourceTransition(src domain.SyncSource) {
+// entered or left the Error state, sends a desktop notification. multi
+// controls whether the notification title is prefixed with src's server
+// name (see displayName).
+func (a *App) notifySourceTransition(src domain.SyncSource, multi bool) {
 	prev, known := a.sourceStates[src.ID]
 	a.sourceStates[src.ID] = src.State
 
 	switch classifyTransition(known, prev, src.State) {
 	case transitionErrorOccurred:
-		a.sendNotification(beeep.Alert, src.Name+": sync error", src.Detail, domain.SyncStateError)
+		a.sendNotification(beeep.Alert, displayName(src, multi)+": sync error", src.Detail, domain.SyncStateError)
 	case transitionErrorCleared:
-		a.sendNotification(beeep.Notify, src.Name+": sync restored", src.Detail, domain.SyncStateSynced)
+		a.sendNotification(beeep.Notify, displayName(src, multi)+": sync restored", src.Detail, domain.SyncStateSynced)
 	}
 }
 
