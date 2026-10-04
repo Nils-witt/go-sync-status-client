@@ -1,0 +1,2 @@
+# Keep LF on every OS so gofmt/gofumpt pass on Windows CI checkouts.
+* text=auto eol=lf
