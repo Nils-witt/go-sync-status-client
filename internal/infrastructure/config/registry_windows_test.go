@@ -9,7 +9,19 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
+// skipIfMachineKeyExists skips t when HKLM already holds registryKeyPath,
+// since loadFromRegistry prefers it over the HKCU key these tests control.
+func skipIfMachineKeyExists(t *testing.T) {
+	t.Helper()
+	key, err := registry.OpenKey(registry.LOCAL_MACHINE, registryKeyPath, registry.QUERY_VALUE)
+	if err == nil {
+		_ = key.Close()
+		t.Skipf("HKLM\\%s exists and would shadow the HKCU test key", registryKeyPath)
+	}
+}
+
 func TestLoad_MissingFileFallsBackToRegistry(t *testing.T) {
+	skipIfMachineKeyExists(t)
 	key, _, err := registry.CreateKey(registry.CURRENT_USER, registryKeyPath, registry.SET_VALUE|registry.QUERY_VALUE)
 	if err != nil {
 		t.Fatalf("create registry key: %v", err)
@@ -39,6 +51,7 @@ func TestLoad_MissingFileFallsBackToRegistry(t *testing.T) {
 }
 
 func TestLoad_MissingFileAndRegistryKeyUsesDefaults(t *testing.T) {
+	skipIfMachineKeyExists(t)
 	_ = registry.DeleteKey(registry.CURRENT_USER, registryKeyPath)
 
 	cfg, err := Load(filepath.Join(t.TempDir(), "does-not-exist.json"), testLogger)

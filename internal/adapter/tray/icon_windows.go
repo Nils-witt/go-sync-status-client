@@ -38,7 +38,7 @@ func encodeIconBytes(pngBytes []byte) []byte {
 	entry[3] = 0                                                            // reserved
 	binary.LittleEndian.PutUint16(entry[4:6], 1)                            // color planes
 	binary.LittleEndian.PutUint16(entry[6:8], 32)                           // bits per pixel
-	binary.LittleEndian.PutUint32(entry[8:12], uint32(len(pngBytes)))       // image data size
+	binary.LittleEndian.PutUint32(entry[8:12], uint32(len(pngBytes)))       //nolint:gosec // image data size; a 32x32 PNG is far below 4 GiB
 	binary.LittleEndian.PutUint32(entry[12:16], icoHeaderSize+icoEntrySize) // offset to image data
 
 	copy(buf[icoHeaderSize+icoEntrySize:], pngBytes)
