@@ -26,18 +26,11 @@ builds:
       - goos: linux
         goarch: arm64
     ldflags:
+      # windowsgui stops Windows from opening a console window on launch.
+      - '{{ if eq .Os "windows" }}-H=windowsgui{{ end }}'
       - -s -w
       - -X main.version={{ .Version }}
       - -X main.commit={{ .Commit }}
-
-    overrides:
-      - goos: windows
-        goarch: amd64
-        ldflags:
-          - -H=windowsgui
-          - -s -w
-          - -X main.version={{ .Version }}
-          - -X main.commit={{ .Commit }}
 archives:
   - formats: [tar.gz]
     name_template: >-

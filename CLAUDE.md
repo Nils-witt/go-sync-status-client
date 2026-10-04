@@ -14,7 +14,7 @@ there is no real sync backend wired up yet.
 
 - Run: `go run ./cmd/go-sync-status-client`
 - Build: `go build ./...`
-- Test: `go test ./...` (no test files exist yet)
+- Test: `go test ./...` (CI runs `go test -race -shuffle=on ./...`)
 - Format: `gofmt -l .` / `go fmt ./...`
 - Vet: `go vet ./...`
 - Tidy deps: `go mod tidy`
@@ -46,10 +46,18 @@ Clean architecture, dependency direction points inward toward `domain`:
 To add a real (non-demo) status source: implement `usecase.StatusRepository` in a new adapter package, then swap
 the provider registered in `internal/infrastructure/di/container.go`.
 
+## CI
+
+`.github/workflows/ci.yml` runs on pushes to `main`, PRs, weekly, and as a gate before every release. It lints
+(`go mod tidy` check + `golangci-lint`, version pinned to match the pre-commit hook) and tests (`go vet`, `go test -race`,
+`govulncheck`) natively on `macos-latest` and `windows-latest` — the two shipped targets, since systray needs cgo on
+darwin and there are windows-only files. Linux is skipped (not shipped; would need GTK headers). Dependabot
+(`.github/dependabot.yml`) keeps actions and Go modules current.
+
 ## Release
 
 Releases are built with [GoReleaser](https://goreleaser.com) (`.goreleaser.yml`) and published by
-`.github/workflows/release.yml` on any `v*` tag push.
+`.github/workflows/release.yml` on any `v*` tag push, after `ci.yml` passes (called as a reusable workflow).
 
 `internal/adapter/tray` wraps `getlantern/systray`, which needs CGO on darwin (Objective-C) and linux
 (GTK/C) — only windows is pure Go. No single host can cross-compile all of that, and the Pro-only
