@@ -116,3 +116,57 @@ func TestLoad_MissingFileAndRegistryKeyUsesDefaults(t *testing.T) {
 		t.Errorf("RefreshIntervalSeconds = %d, want %d", cfg.RefreshIntervalSeconds, defaultRefreshIntervalSeconds)
 	}
 }
+
+func TestLoad_MissingFileFallsBackToRegistryConfigJSON(t *testing.T) {
+	skipIfMachineKeyExists(t)
+	key, _, err := registry.CreateKey(registry.CURRENT_USER, registryKeyPath, registry.SET_VALUE|registry.QUERY_VALUE)
+	if err != nil {
+		t.Fatalf("create registry key: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = key.Close()
+		_ = registry.DeleteKey(registry.CURRENT_USER, registryKeyPath)
+	})
+
+	// ConfigJSON wins over the individual values.
+	if err := key.SetStringValue("BaseURL", "http://ignored.example.com"); err != nil {
+		t.Fatalf("SetStringValue BaseURL: %v", err)
+	}
+	if err := key.SetStringsValue(registryConfigJSONValue, []string{
+		`{`,
+		`  "servers": [{"name": "nas", "base_url": "http://nas.example.com:8081", "bearer_token": "tok"}],`,
+		`  "refresh_interval_seconds": 30`,
+		`}`,
+	}); err != nil {
+		t.Fatalf("SetStringsValue %s: %v", registryConfigJSONValue, err)
+	}
+
+	cfg, err := Load(filepath.Join(t.TempDir(), "does-not-exist.json"), testLogger)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	want := []ServerConfig{{Name: "nas", BaseURL: "http://nas.example.com:8081", BearerToken: "tok"}}
+	if !slices.Equal(cfg.Servers, want) || cfg.RefreshIntervalSeconds != 30 {
+		t.Errorf("Load() = %+v, want servers %+v and refresh 30", cfg, want)
+	}
+}
+
+func TestLoad_InvalidRegistryConfigJSONIsError(t *testing.T) {
+	skipIfMachineKeyExists(t)
+	key, _, err := registry.CreateKey(registry.CURRENT_USER, registryKeyPath, registry.SET_VALUE|registry.QUERY_VALUE)
+	if err != nil {
+		t.Fatalf("create registry key: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = key.Close()
+		_ = registry.DeleteKey(registry.CURRENT_USER, registryKeyPath)
+	})
+
+	if err := key.SetStringValue(registryConfigJSONValue, `{"servers": [`); err != nil {
+		t.Fatalf("SetStringValue %s: %v", registryConfigJSONValue, err)
+	}
+
+	if _, err := Load(filepath.Join(t.TempDir(), "does-not-exist.json"), testLogger); err == nil {
+		t.Error("Load() error = nil, want parse error")
+	}
+}

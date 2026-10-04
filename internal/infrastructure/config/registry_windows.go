@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"math"
 	"slices"
+	"strings"
 
 	"golang.org/x/sys/windows/registry"
 )
@@ -19,12 +20,20 @@ import (
 // Layout:
 //
 //	Software\go-sync-status-client
+//	    ConfigJSON               (REG_SZ or REG_MULTI_SZ, optional) — the full
+//	                             config.json content; if set, every other
+//	                             value below is ignored
 //	    BaseURL, BearerToken     (REG_SZ, optional)    — legacy single server
 //	    RefreshIntervalSeconds   (REG_DWORD, optional)
 //	    Servers\<subkey>         — one subkey per server, in subkey-name order
 //	        Name                 (REG_SZ, optional; defaults to <subkey>)
 //	        BaseURL, BearerToken (REG_SZ)
 const registryKeyPath = `Software\go-sync-status-client`
+
+// registryConfigJSONValue holds the full config.json content as a single
+// registry value, for deployments that would rather ship one JSON blob than
+// map each setting to its own value.
+const registryConfigJSONValue = "ConfigJSON"
 
 // registryServersSubkey holds one child key per configured server.
 const registryServersSubkey = "Servers"
@@ -56,11 +65,43 @@ func loadFromRegistry(logger *slog.Logger) (cfg Config, ok bool, err error) {
 			return Config{}, false, fmt.Errorf("config: open registry key %s\\%s: %w", root.name, registryKeyPath, err)
 		}
 		logger.Info("config: loaded from registry key", "hive", root.name, "key", registryKeyPath)
-		cfg := readRegistryValues(key, logger)
+		cfg, err := readRegistryKey(key, root.name, logger)
 		_ = key.Close()
+		if err != nil {
+			return Config{}, false, err
+		}
 		return cfg, true, nil
 	}
 	return Config{}, false, nil
+}
+
+// readRegistryKey parses Config from an open registryKeyPath key in hive.
+// A non-blank registryConfigJSONValue wins outright (and must be valid
+// JSON); otherwise the individual values are read via readRegistryValues.
+func readRegistryKey(key registry.Key, hive string, logger *slog.Logger) (Config, error) {
+	data, ok := readConfigJSON(key)
+	if !ok {
+		return readRegistryValues(key, logger), nil
+	}
+	logger.Info("config: using registry value", "hive", hive, "value", registryConfigJSONValue)
+	return parseJSON([]byte(data), hive+`\`+registryKeyPath+`\`+registryConfigJSONValue)
+}
+
+// readConfigJSON returns the registryConfigJSONValue content from key. It
+// accepts REG_SZ/REG_EXPAND_SZ, or REG_MULTI_SZ (lines joined with "\n") so
+// pretty-printed JSON can be pasted into regedit's multi-string editor. ok
+// is false when the value is missing or blank.
+func readConfigJSON(key registry.Key) (data string, ok bool) {
+	data, _, err := key.GetStringValue(registryConfigJSONValue)
+	if errors.Is(err, registry.ErrUnexpectedType) {
+		var lines []string
+		lines, _, err = key.GetStringsValue(registryConfigJSONValue)
+		data = strings.Join(lines, "\n")
+	}
+	if err != nil || strings.TrimSpace(data) == "" {
+		return "", false
+	}
+	return data, true
 }
 
 // readRegistryValues parses Config values from an open registry key. The

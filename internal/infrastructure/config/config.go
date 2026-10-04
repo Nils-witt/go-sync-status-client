@@ -81,11 +81,21 @@ func Load(path string, logger *slog.Logger) (Config, error) {
 		return Config{}, fmt.Errorf("config: read %s: %w", path, err)
 	}
 
-	var cfg Config
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return Config{}, fmt.Errorf("config: parse %s: %w", path, err)
+	cfg, err := parseJSON(data, path)
+	if err != nil {
+		return Config{}, err
 	}
 	return applyDefaults(cfg), nil
+}
+
+// parseJSON decodes config.json-formatted data. source names where data came
+// from (a file path or registry value) for the error message.
+func parseJSON(data []byte, source string) (Config, error) {
+	var cfg Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return Config{}, fmt.Errorf("config: parse %s: %w", source, err)
+	}
+	return cfg, nil
 }
 
 // applyDefaults fills in defaults for any field cfg left unset, regardless
