@@ -4,6 +4,7 @@ package config
 
 import (
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"golang.org/x/sys/windows/registry"
@@ -47,6 +48,56 @@ func TestLoad_MissingFileFallsBackToRegistry(t *testing.T) {
 	}
 	if len(cfg.Servers) != 1 || cfg.Servers[0].BaseURL != "http://registry.example.com" || cfg.Servers[0].BearerToken != "reg-tok" || cfg.RefreshIntervalSeconds != 42 {
 		t.Errorf("Load() = %+v, want values from registry", cfg)
+	}
+}
+
+func TestLoad_MissingFileFallsBackToRegistryServers(t *testing.T) {
+	skipIfMachineKeyExists(t)
+	root, _, err := registry.CreateKey(registry.CURRENT_USER, registryKeyPath, registry.SET_VALUE|registry.QUERY_VALUE)
+	if err != nil {
+		t.Fatalf("create registry key: %v", err)
+	}
+	serverKeys := []string{"b-second", "a-first"}
+	t.Cleanup(func() {
+		_ = root.Close()
+		for _, name := range serverKeys {
+			_ = registry.DeleteKey(registry.CURRENT_USER, registryKeyPath+`\`+registryServersSubkey+`\`+name)
+		}
+		_ = registry.DeleteKey(registry.CURRENT_USER, registryKeyPath+`\`+registryServersSubkey)
+		_ = registry.DeleteKey(registry.CURRENT_USER, registryKeyPath)
+	})
+
+	if err := root.SetStringValue("BaseURL", "http://legacy.example.com"); err != nil {
+		t.Fatalf("SetStringValue BaseURL: %v", err)
+	}
+	values := map[string]map[string]string{
+		"b-second": {"BaseURL": "http://second.example.com", "BearerToken": "tok-2"},
+		"a-first":  {"BaseURL": "http://first.example.com", "Name": "Primary"},
+	}
+	for _, name := range serverKeys {
+		key, _, err := registry.CreateKey(registry.CURRENT_USER, registryKeyPath+`\`+registryServersSubkey+`\`+name, registry.SET_VALUE)
+		if err != nil {
+			t.Fatalf("create server key %s: %v", name, err)
+		}
+		for k, v := range values[name] {
+			if err := key.SetStringValue(k, v); err != nil {
+				t.Fatalf("SetStringValue %s/%s: %v", name, k, err)
+			}
+		}
+		_ = key.Close()
+	}
+
+	cfg, err := Load(filepath.Join(t.TempDir(), "does-not-exist.json"), testLogger)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	want := []ServerConfig{
+		{Name: "legacy.example.com", BaseURL: "http://legacy.example.com"},
+		{Name: "Primary", BaseURL: "http://first.example.com"},
+		{Name: "b-second", BaseURL: "http://second.example.com", BearerToken: "tok-2"},
+	}
+	if !slices.Equal(cfg.Servers, want) {
+		t.Errorf("Servers = %+v, want %+v", cfg.Servers, want)
 	}
 }
 

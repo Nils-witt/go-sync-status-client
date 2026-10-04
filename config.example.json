@@ -1,5 +1,15 @@
 {
-  "base_url": "http://localhost:8081",
-  "bearer_token": "",
+  "servers": [
+    {
+      "name": "local",
+      "base_url": "http://localhost:8081",
+      "bearer_token": ""
+    },
+    {
+      "name": "nas",
+      "base_url": "http://nas.example.com:8081",
+      "bearer_token": "replace-with-token"
+    }
+  ],
   "refresh_interval_seconds": 60
 }
