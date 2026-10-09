@@ -19,29 +19,29 @@ func TestConnectionLabel(t *testing.T) {
 		{
 			name: "live",
 			conn: domain.Connection{ServerName: testServerOne, Live: true, DisconnectedAt: disconnected, LastPoll: polled},
-			want: "✓ Live updates connected",
+			want: "✓",
 		},
 		{
 			name:  "live, multi server",
 			conn:  domain.Connection{ServerName: testServerOne, Live: true},
 			multi: true,
-			want:  "✓ one: Live updates connected",
+			want:  "✓ one",
 		},
 		{
 			name: "connecting, polled",
 			conn: domain.Connection{LastPoll: polled},
-			want: "? Live updates connecting — last poll 14:05:30",
+			want: "? last poll 14:05:30",
 		},
 		{
 			name: "disconnected, never polled",
 			conn: domain.Connection{DisconnectedAt: disconnected},
-			want: "⏸ Live updates disconnected since 14:03:00 — polling, last poll never",
+			want: "⏸ disconnected since 14:03:00, last poll never",
 		},
 		{
 			name:  "disconnected, polled, multi server",
 			conn:  domain.Connection{ServerName: testServerTwo, DisconnectedAt: disconnected, LastPoll: polled},
 			multi: true,
-			want:  "⏸ two: Live updates disconnected since 14:03:00 — polling, last poll 14:05:30",
+			want:  "⏸ two disconnected since 14:03:00, last poll 14:05:30",
 		},
 	}
 

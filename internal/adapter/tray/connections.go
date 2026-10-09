@@ -40,16 +40,16 @@ func (a *App) refreshConnectionSection() {
 func connectionLabel(c domain.Connection, multi bool) string {
 	prefix := ""
 	if multi && c.ServerName != "" {
-		prefix = c.ServerName + ": "
+		prefix = " " + c.ServerName
 	}
 
 	switch {
 	case c.Live:
-		return fmt.Sprintf("%s %sLive updates connected", domain.SyncStateSynced.Symbol(), prefix)
+		return fmt.Sprintf("%s%s", domain.SyncStateSynced.Symbol(), prefix)
 	case c.DisconnectedAt.IsZero():
-		return fmt.Sprintf("%s %sLive updates connecting — last poll %s", domain.SyncStateUnknown.Symbol(), prefix, formatLastRun(c.LastPoll))
+		return fmt.Sprintf("%s%s last poll %s", domain.SyncStateUnknown.Symbol(), prefix, formatLastRun(c.LastPoll))
 	default:
-		return fmt.Sprintf("%s %sLive updates disconnected since %s — polling, last poll %s",
+		return fmt.Sprintf("%s%s disconnected since %s, last poll %s",
 			domain.SyncStatePaused.Symbol(), prefix, formatLastRun(c.DisconnectedAt), formatLastRun(c.LastPoll))
 	}
 }

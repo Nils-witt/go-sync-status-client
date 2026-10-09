@@ -55,6 +55,50 @@ func (a *App) notifySourceTransition(src domain.SyncSource, multi bool) {
 	}
 }
 
+// notifyTargetTransition updates the tracked state for tgt (one of src's
+// targets) and, if it just entered or left the Error state, sends a desktop
+// notification. multi is as for notifySourceTransition.
+func (a *App) notifyTargetTransition(src domain.SyncSource, tgt domain.SyncTarget, multi bool) {
+	key := targetKey(src.ID, tgt.ID)
+	prev, known := a.targetStates[key]
+	a.targetStates[key] = tgt.State
+
+	name := displayName(src, multi) + " → " + tgt.Label
+	switch classifyTransition(known, prev, tgt.State) {
+	case transitionErrorOccurred:
+		a.sendNotification(beeep.Alert, name+": target error", "Syncing to target "+tgt.Label+" failed", domain.SyncStateError)
+	case transitionErrorCleared:
+		a.sendNotification(beeep.Notify, name+": target restored", "Target "+tgt.Label+" is "+tgt.State.String(), domain.SyncStateSynced)
+	}
+}
+
+// notifyReceiverTransition updates the tracked state for rcv and, if it
+// just entered or left the Error state, sends a desktop notification.
+// multi controls whether the title is prefixed with rcv's server name (see
+// displayReceiverName).
+func (a *App) notifyReceiverTransition(rcv domain.Receiver, multi bool) {
+	prev, known := a.receiverStates[receiverKey(rcv)]
+	a.receiverStates[receiverKey(rcv)] = rcv.State
+
+	name := displayReceiverName(rcv, multi)
+	switch classifyTransition(known, prev, rcv.State) {
+	case transitionErrorOccurred:
+		a.sendNotification(beeep.Alert, name+": receiver error", receiverMessage(rcv), domain.SyncStateError)
+	case transitionErrorCleared:
+		a.sendNotification(beeep.Notify, name+": receiver restored", receiverMessage(rcv), domain.SyncStateSynced)
+	}
+}
+
+// receiverMessage is the notification body for rcv: its path and when it
+// was last seen.
+func receiverMessage(rcv domain.Receiver) string {
+	msg := "Last seen " + formatLastRun(rcv.LastSeen)
+	if rcv.Path != "" {
+		msg = rcv.Path + " — " + msg
+	}
+	return msg
+}
+
 // notifyFetchFailure notifies once when fetching sync status starts
 // failing; repeated failures on later refreshes stay silent until it
 // recovers.

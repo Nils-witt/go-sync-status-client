@@ -25,9 +25,12 @@ type App struct {
 	// stopWatch cancels the context watcher runs under; set in onReady.
 	stopWatch context.CancelFunc
 
-	sourceItems   map[string]*systray.MenuItem
-	targetItems   map[string]*systray.MenuItem
-	receiverItems map[string]*systray.MenuItem
+	sourceItems map[string]*systray.MenuItem
+	targetItems map[string]*systray.MenuItem
+	// receiverServerItems is keyed by server name; receiverItems by
+	// receiverKey.
+	receiverServerItems map[string]*systray.MenuItem
+	receiverItems       map[string]*systray.MenuItem
 	// connectionItems is keyed by server name.
 	connectionItems map[string]*systray.MenuItem
 	refreshItem     *systray.MenuItem
@@ -37,7 +40,10 @@ type App struct {
 	// notifySourceTransition/notifyFetchFailure/notifyFetchRecovered can
 	// detect state changes worth a desktop notification.
 	sourceStates map[string]domain.SyncState
-	fetchFailed  bool
+	// targetStates is keyed by targetKey; receiverStates by receiverKey.
+	targetStates   map[string]domain.SyncState
+	receiverStates map[string]domain.SyncState
+	fetchFailed    bool
 }
 
 // NewApp builds the tray app. watcher, if non-nil, pushes change
@@ -47,17 +53,20 @@ type App struct {
 // the user clicks Refresh.
 func NewApp(service *usecase.StatusService, receiverService *usecase.ReceiverService, connectionService *usecase.ConnectionService, watcher usecase.ChangeWatcher, logger *slog.Logger, refreshInterval time.Duration) *App {
 	return &App{
-		service:           service,
-		receiverService:   receiverService,
-		connectionService: connectionService,
-		watcher:           watcher,
-		logger:            logger,
-		refreshInterval:   refreshInterval,
-		sourceItems:       make(map[string]*systray.MenuItem),
-		targetItems:       make(map[string]*systray.MenuItem),
-		receiverItems:     make(map[string]*systray.MenuItem),
-		connectionItems:   make(map[string]*systray.MenuItem),
-		sourceStates:      make(map[string]domain.SyncState),
+		service:             service,
+		receiverService:     receiverService,
+		connectionService:   connectionService,
+		watcher:             watcher,
+		logger:              logger,
+		refreshInterval:     refreshInterval,
+		sourceItems:         make(map[string]*systray.MenuItem),
+		targetItems:         make(map[string]*systray.MenuItem),
+		receiverServerItems: make(map[string]*systray.MenuItem),
+		receiverItems:       make(map[string]*systray.MenuItem),
+		connectionItems:     make(map[string]*systray.MenuItem),
+		sourceStates:        make(map[string]domain.SyncState),
+		targetStates:        make(map[string]domain.SyncState),
+		receiverStates:      make(map[string]domain.SyncState),
 	}
 }
 
@@ -89,11 +98,12 @@ func (a *App) onReady() {
 		// item.Disable() // informational row, not an action
 		a.sourceItems[src.ID] = item
 		a.sourceStates[src.ID] = src.State
+		item.AddSubMenuItem(fmt.Sprintf("%s (last run: %s)", src.State, formatLastRun(src.UpdatedAt)), "").Disable()
 
 		for _, tgt := range src.Targets {
 			sub := item.AddSubMenuItem(targetLabel(tgt), "")
-			sub.Disable() // informational row, not an action
 			a.targetItems[targetKey(src.ID, tgt.ID)] = sub
+			a.targetStates[targetKey(src.ID, tgt.ID)] = tgt.State
 		}
 	}
 
@@ -180,6 +190,8 @@ func (a *App) refresh(ctx context.Context) {
 		item.SetTooltip(src.Detail)
 
 		for _, tgt := range src.Targets {
+			a.notifyTargetTransition(src, tgt, multi)
+
 			sub, ok := a.targetItems[targetKey(src.ID, tgt.ID)]
 			if !ok {
 				continue
@@ -232,7 +244,7 @@ func displayName(src domain.SyncSource, multi bool) string {
 }
 
 func menuLabel(src domain.SyncSource, multi bool) string {
-	return fmt.Sprintf("%s %s — %s (last run %s)", src.State.Symbol(), displayName(src, multi), src.State, formatLastRun(src.UpdatedAt))
+	return fmt.Sprintf("%s %s", src.State.Symbol(), displayName(src, multi))
 }
 
 // formatLastRun renders a source's UpdatedAt for display in a menu label.

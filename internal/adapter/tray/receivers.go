@@ -4,15 +4,17 @@ import (
 	"context"
 	"fmt"
 	"go-sync-status-client/internal/domain"
+	"go-sync-status-client/internal/usecase"
 
 	"github.com/getlantern/systray"
 )
 
 // addReceiverSection fetches receivers and renders them as a separate menu
-// section (its own separator, a disabled header, then one row per
-// receiver). Unlike a sources fetch failure, a receivers fetch failure
-// doesn't abort the whole menu build — it just renders a single disabled
-// "unavailable" row in the receivers section.
+// section: its own separator, a disabled header, then one row per server
+// whose submenu holds one row per receiver on that server. Unlike a sources
+// fetch failure, a receivers fetch failure doesn't abort the whole menu
+// build — it just renders a single disabled "unavailable" row in the
+// receivers section.
 func (a *App) addReceiverSection(ctx context.Context) {
 	receivers, err := a.receiverService.Receivers(ctx)
 	if err != nil {
@@ -23,21 +25,27 @@ func (a *App) addReceiverSection(ctx context.Context) {
 		return
 	}
 
-	multi := multiServerReceivers(receivers)
-	a.logger.Info("initial receivers fetch", "count", len(receivers), "multi_server", multi)
+	groups := groupReceiversByServer(receivers)
+	a.logger.Info("initial receivers fetch", "count", len(receivers), "servers", len(groups))
 
 	systray.AddSeparator()
 	systray.AddMenuItem("Receivers", "").Disable()
-	for _, rcv := range receivers {
-		item := systray.AddMenuItem(receiverLabel(rcv, multi), receiverDetail(rcv))
-		a.receiverItems[rcv.ID] = item
+	for _, g := range groups {
+		serverItem := systray.AddMenuItem(receiverServerLabel(g), "")
+		a.receiverServerItems[g.serverName] = serverItem
+		for _, rcv := range g.receivers {
+			item := serverItem.AddSubMenuItem(receiverLabel(rcv), receiverDetail(rcv))
+			a.receiverItems[receiverKey(rcv)] = item
+			a.receiverStates[receiverKey(rcv)] = rcv.State
+		}
 	}
 }
 
-// refreshReceiverSection re-fetches receivers and updates existing rows in
-// place. It never touches the sources-driven overall icon/tooltip; a
-// receivers fetch failure is logged and otherwise ignored, leaving the
-// section showing its last-known values.
+// refreshReceiverSection re-fetches receivers and updates existing server
+// and receiver rows in place. It never touches the sources-driven overall
+// icon/tooltip; a receivers fetch failure is logged and otherwise ignored,
+// leaving the section showing its last-known values. Servers or receivers
+// that weren't present at startup aren't added.
 func (a *App) refreshReceiverSection(ctx context.Context) {
 	receivers, err := a.receiverService.Receivers(ctx)
 	if err != nil {
@@ -46,14 +54,66 @@ func (a *App) refreshReceiverSection(ctx context.Context) {
 	}
 
 	multi := multiServerReceivers(receivers)
-	for _, rcv := range receivers {
-		item, ok := a.receiverItems[rcv.ID]
-		if !ok {
-			continue
+	for _, g := range groupReceiversByServer(receivers) {
+		if serverItem, ok := a.receiverServerItems[g.serverName]; ok {
+			serverItem.SetTitle(receiverServerLabel(g))
 		}
-		item.SetTitle(receiverLabel(rcv, multi))
-		item.SetTooltip(receiverDetail(rcv))
+
+		for _, rcv := range g.receivers {
+			a.notifyReceiverTransition(rcv, multi)
+
+			item, ok := a.receiverItems[receiverKey(rcv)]
+			if !ok {
+				continue
+			}
+			item.SetTitle(receiverLabel(rcv))
+			item.SetTooltip(receiverDetail(rcv))
+		}
 	}
+}
+
+// receiverGroup is the set of receivers reported by one server.
+type receiverGroup struct {
+	serverName string
+	receivers  []domain.Receiver
+}
+
+// groupReceiversByServer groups receivers by ServerName, keeping servers
+// and the receivers within each in the order they were first seen.
+func groupReceiversByServer(receivers []domain.Receiver) []receiverGroup {
+	var groups []receiverGroup
+	index := make(map[string]int)
+	for _, rcv := range receivers {
+		i, ok := index[rcv.ServerName]
+		if !ok {
+			i = len(groups)
+			index[rcv.ServerName] = i
+			groups = append(groups, receiverGroup{serverName: rcv.ServerName})
+		}
+		groups[i].receivers = append(groups[i].receivers, rcv)
+	}
+	return groups
+}
+
+// receiverServerLabel renders a server row: the worst state among its
+// receivers, its name, and how many receivers it has.
+func receiverServerLabel(g receiverGroup) string {
+	states := make([]domain.SyncState, len(g.receivers))
+	for i, rcv := range g.receivers {
+		states[i] = rcv.State
+	}
+
+	name := g.serverName
+	if name == "" {
+		name = "Server"
+	}
+	return fmt.Sprintf("%s %s (%d)", usecase.WorstState(states...).Symbol(), name, len(g.receivers))
+}
+
+// receiverKey identifies rcv across servers, since receiver IDs are only
+// unique within a single server.
+func receiverKey(rcv domain.Receiver) string {
+	return rcv.ServerName + "|" + rcv.ID
 }
 
 // multiServerReceivers reports whether receivers span more than one
@@ -79,13 +139,15 @@ func displayReceiverName(rcv domain.Receiver, multi bool) string {
 	return rcv.ID
 }
 
-func receiverLabel(rcv domain.Receiver, multi bool) string {
-	return fmt.Sprintf("%s %s — %s (last seen %s)", rcv.State.Symbol(), displayReceiverName(rcv, multi), rcv.State, formatLastRun(rcv.LastSeen))
+// receiverLabel renders a receiver row. It's nested under its server's
+// row, so unlike displayReceiverName it never needs a server prefix.
+func receiverLabel(rcv domain.Receiver) string {
+	return fmt.Sprintf("%s %s", rcv.State.Symbol(), rcv.ID)
 }
 
 func receiverDetail(rcv domain.Receiver) string {
 	if rcv.Path == "" {
 		return ""
 	}
-	return fmt.Sprintf("%s (last key: %s, retention: %s)", rcv.Path, rcv.LastKey, rcv.Retention)
+	return fmt.Sprintf("%s (last key: %s, at: %s)", rcv.State, rcv.LastKey, formatLastRun(rcv.LastSeen))
 }

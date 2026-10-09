@@ -56,7 +56,18 @@ func (s *StatusService) OverallState(ctx context.Context) (domain.SyncState, err
 // the tray, once per refresh) don't need a second ListSources round trip
 // just to derive the overall state.
 func OverallStateOf(sources []domain.SyncSource) domain.SyncState {
-	if len(sources) == 0 {
+	states := make([]domain.SyncState, len(sources))
+	for i, src := range sources {
+		states[i] = src.State
+	}
+	return WorstState(states...)
+}
+
+// WorstState reduces states to the single most severe one: Error beats
+// Incomplete beats Syncing beats Paused beats Synced. It returns
+// SyncStateUnknown when states is empty.
+func WorstState(states ...domain.SyncState) domain.SyncState {
+	if len(states) == 0 {
 		return domain.SyncStateUnknown
 	}
 
@@ -77,10 +88,10 @@ func OverallStateOf(sources []domain.SyncSource) domain.SyncState {
 		}
 	}
 
-	worst := sources[0].State
-	for _, src := range sources[1:] {
-		if rank(src.State) > rank(worst) {
-			worst = src.State
+	worst := states[0]
+	for _, s := range states[1:] {
+		if rank(s) > rank(worst) {
+			worst = s
 		}
 	}
 	return worst
