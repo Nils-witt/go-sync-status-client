@@ -1,6 +1,7 @@
 /.agents
 /agent
 /.claude
+/.idea
 
 config.json
 
