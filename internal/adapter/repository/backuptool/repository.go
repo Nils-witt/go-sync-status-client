@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -22,6 +23,14 @@ type Repository struct {
 	token      string
 	httpClient *http.Client
 	logger     *slog.Logger
+
+	// live is the most recent message from the GET /api/live WebSocket
+	// (see Watch), or nil while not connected. disconnectedAt and lastPoll
+	// back Connections.
+	liveMu         sync.RWMutex
+	live           *liveStatus
+	disconnectedAt time.Time
+	lastPoll       time.Time
 }
 
 // Option configures a Repository.
@@ -91,9 +100,14 @@ type targetSnapshot struct {
 	State  runState `json:"state"`
 }
 
-// ListSources implements usecase.StatusRepository by fetching and mapping
-// GET /api/status.
+// ListSources implements usecase.StatusRepository. While Watch is
+// connected, it maps the latest live status message; otherwise it fetches
+// and maps GET /api/status.
 func (r *Repository) ListSources(ctx context.Context) ([]domain.SyncSource, error) {
+	if live := r.liveSnapshot(); live != nil {
+		return toSyncSources(live.Jobs), nil
+	}
+
 	url := r.baseURL + "/api/status"
 	start := time.Now()
 
@@ -125,12 +139,17 @@ func (r *Repository) ListSources(ctx context.Context) ([]domain.SyncSource, erro
 		return nil, fmt.Errorf("backuptool: decode response: %w", err)
 	}
 
+	r.recordPoll()
+	r.logger.Debug("backuptool: status fetched", "jobs", len(jobs), "elapsed", time.Since(start))
+	return toSyncSources(jobs), nil
+}
+
+func toSyncSources(jobs []jobSnapshot) []domain.SyncSource {
 	sources := make([]domain.SyncSource, 0, len(jobs))
 	for _, j := range jobs {
 		sources = append(sources, toSyncSource(j))
 	}
-	r.logger.Debug("backuptool: status fetched", "jobs", len(sources), "elapsed", time.Since(start))
-	return sources, nil
+	return sources
 }
 
 func toSyncSource(j jobSnapshot) domain.SyncSource {

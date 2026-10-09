@@ -23,9 +23,14 @@ type receiverSnapshot struct {
 	StaleAfter string    `json:"stale_after"`
 }
 
-// ListReceivers implements usecase.ReceiverRepository by fetching and
-// mapping GET /api/receivers.
+// ListReceivers implements usecase.ReceiverRepository. While Watch is
+// connected, it maps the latest live status message; otherwise it fetches
+// and maps GET /api/receivers.
 func (r *Repository) ListReceivers(ctx context.Context) ([]domain.Receiver, error) {
+	if live := r.liveSnapshot(); live != nil {
+		return r.toReceivers(live.Receivers), nil
+	}
+
 	url := r.baseURL + "/api/receivers"
 	start := time.Now()
 
@@ -57,12 +62,16 @@ func (r *Repository) ListReceivers(ctx context.Context) ([]domain.Receiver, erro
 		return nil, fmt.Errorf("backuptool: decode response: %w", err)
 	}
 
+	r.logger.Debug("backuptool: receivers fetched", "receivers", len(snapshots), "elapsed", time.Since(start))
+	return r.toReceivers(snapshots), nil
+}
+
+func (r *Repository) toReceivers(snapshots []receiverSnapshot) []domain.Receiver {
 	receivers := make([]domain.Receiver, 0, len(snapshots))
 	for _, s := range snapshots {
 		receivers = append(receivers, r.toReceiver(s))
 	}
-	r.logger.Debug("backuptool: receivers fetched", "receivers", len(receivers), "elapsed", time.Since(start))
-	return receivers, nil
+	return receivers
 }
 
 func (r *Repository) toReceiver(s receiverSnapshot) domain.Receiver {

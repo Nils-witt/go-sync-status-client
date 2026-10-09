@@ -16,9 +16,10 @@ import (
 
 // backuptoolServer pairs a configured server's name with the
 // backuptool.Repository that talks to it. backuptool.Repository satisfies
-// both usecase.StatusRepository and usecase.ReceiverRepository, so sources
-// and receivers share the same per-server HTTP client instead of each
-// constructing their own.
+// usecase.StatusRepository, usecase.ReceiverRepository,
+// usecase.ConnectionRepository and usecase.ChangeWatcher, so sources and receivers share the same per-server
+// HTTP client and live status connection instead of each constructing
+// their own.
 type backuptoolServer struct {
 	name string
 	repo *backuptool.Repository
@@ -98,13 +99,33 @@ func New(configPath string, logger *slog.Logger) *do.RootScope {
 		return usecase.NewReceiverService(repo, logger), nil
 	})
 
+	do.Provide(injector, func(i do.Injector) (*usecase.ConnectionService, error) {
+		servers := do.MustInvoke[[]backuptoolServer](i)
+		entries := make([]multi.ConnectionEntry, 0, len(servers))
+		for _, s := range servers {
+			entries = append(entries, multi.ConnectionEntry{Name: s.name, Repo: s.repo})
+		}
+		return usecase.NewConnectionService(multi.NewConnectionRepository(entries...)), nil
+	})
+
+	do.Provide(injector, func(i do.Injector) (usecase.ChangeWatcher, error) {
+		servers := do.MustInvoke[[]backuptoolServer](i)
+		watchers := make([]usecase.ChangeWatcher, 0, len(servers))
+		for _, s := range servers {
+			watchers = append(watchers, s.repo)
+		}
+		return multi.NewWatcher(watchers...), nil
+	})
+
 	do.Provide(injector, func(i do.Injector) (*tray.App, error) {
 		service := do.MustInvoke[*usecase.StatusService](i)
 		receiverService := do.MustInvoke[*usecase.ReceiverService](i)
+		connectionService := do.MustInvoke[*usecase.ConnectionService](i)
+		watcher := do.MustInvoke[usecase.ChangeWatcher](i)
 		logger := do.MustInvoke[*slog.Logger](i)
 		cfg := do.MustInvoke[config.Config](i)
 		refreshInterval := time.Duration(cfg.RefreshIntervalSeconds) * time.Second
-		return tray.NewApp(service, receiverService, logger, refreshInterval), nil
+		return tray.NewApp(service, receiverService, connectionService, watcher, logger, refreshInterval), nil
 	})
 
 	return injector

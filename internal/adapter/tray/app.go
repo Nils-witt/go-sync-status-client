@@ -15,16 +15,23 @@ import (
 
 // App renders sync status in the system tray.
 type App struct {
-	service         *usecase.StatusService
-	receiverService *usecase.ReceiverService
-	logger          *slog.Logger
-	refreshInterval time.Duration
+	service           *usecase.StatusService
+	receiverService   *usecase.ReceiverService
+	connectionService *usecase.ConnectionService
+	watcher           usecase.ChangeWatcher
+	logger            *slog.Logger
+	refreshInterval   time.Duration
+
+	// stopWatch cancels the context watcher runs under; set in onReady.
+	stopWatch context.CancelFunc
 
 	sourceItems   map[string]*systray.MenuItem
 	targetItems   map[string]*systray.MenuItem
 	receiverItems map[string]*systray.MenuItem
-	refreshItem   *systray.MenuItem
-	quitItem      *systray.MenuItem
+	// connectionItems is keyed by server name.
+	connectionItems map[string]*systray.MenuItem
+	refreshItem     *systray.MenuItem
+	quitItem        *systray.MenuItem
 
 	// sourceStates and fetchFailed track prior observations so
 	// notifySourceTransition/notifyFetchFailure/notifyFetchRecovered can
@@ -33,19 +40,24 @@ type App struct {
 	fetchFailed  bool
 }
 
-// NewApp builds the tray app. refreshInterval is how often sync status is
-// automatically re-checked; a non-positive value disables auto refresh, so
-// status only updates when the user clicks Refresh.
-func NewApp(service *usecase.StatusService, receiverService *usecase.ReceiverService, logger *slog.Logger, refreshInterval time.Duration) *App {
+// NewApp builds the tray app. watcher, if non-nil, pushes change
+// notifications that trigger an immediate refresh. refreshInterval is how
+// often sync status is automatically re-checked regardless; a non-positive
+// value disables auto refresh, so without watcher status only updates when
+// the user clicks Refresh.
+func NewApp(service *usecase.StatusService, receiverService *usecase.ReceiverService, connectionService *usecase.ConnectionService, watcher usecase.ChangeWatcher, logger *slog.Logger, refreshInterval time.Duration) *App {
 	return &App{
-		service:         service,
-		receiverService: receiverService,
-		logger:          logger,
-		refreshInterval: refreshInterval,
-		sourceItems:     make(map[string]*systray.MenuItem),
-		targetItems:     make(map[string]*systray.MenuItem),
-		receiverItems:   make(map[string]*systray.MenuItem),
-		sourceStates:    make(map[string]domain.SyncState),
+		service:           service,
+		receiverService:   receiverService,
+		connectionService: connectionService,
+		watcher:           watcher,
+		logger:            logger,
+		refreshInterval:   refreshInterval,
+		sourceItems:       make(map[string]*systray.MenuItem),
+		targetItems:       make(map[string]*systray.MenuItem),
+		receiverItems:     make(map[string]*systray.MenuItem),
+		connectionItems:   make(map[string]*systray.MenuItem),
+		sourceStates:      make(map[string]domain.SyncState),
 	}
 }
 
@@ -86,6 +98,7 @@ func (a *App) onReady() {
 	}
 
 	a.addReceiverSection(ctx)
+	a.addConnectionSection()
 
 	systray.AddSeparator()
 	a.refreshItem = systray.AddMenuItem("Refresh", "Re-check sync status")
@@ -93,10 +106,31 @@ func (a *App) onReady() {
 
 	a.setOverallIcon(sources)
 
-	go a.handleClicks(ctx)
+	changes := a.startWatch(ctx)
+	go a.handleClicks(ctx, changes)
 }
 
-func (a *App) handleClicks(ctx context.Context) {
+// startWatch runs watcher in the background, if there is one, and returns a
+// channel that receives whenever it reports a change. The channel buffers a
+// single pending change, so a burst of notifications that arrives during a
+// refresh collapses into one follow-up refresh.
+func (a *App) startWatch(ctx context.Context) <-chan struct{} {
+	changes := make(chan struct{}, 1)
+	if a.watcher == nil {
+		return changes
+	}
+
+	ctx, a.stopWatch = context.WithCancel(ctx)
+	go a.watcher.Watch(ctx, func() {
+		select {
+		case changes <- struct{}{}:
+		default:
+		}
+	})
+	return changes
+}
+
+func (a *App) handleClicks(ctx context.Context, changes <-chan struct{}) {
 	var tick <-chan time.Time
 	if a.refreshInterval > 0 {
 		ticker := time.NewTicker(a.refreshInterval)
@@ -111,6 +145,9 @@ func (a *App) handleClicks(ctx context.Context) {
 			a.refresh(ctx)
 		case <-tick:
 			a.logger.Debug("auto refresh tick")
+			a.refresh(ctx)
+		case <-changes:
+			a.logger.Debug("live status change")
 			a.refresh(ctx)
 		case <-a.quitItem.ClickedCh:
 			a.logger.Info("quit clicked")
@@ -152,6 +189,7 @@ func (a *App) refresh(ctx context.Context) {
 	}
 
 	a.refreshReceiverSection(ctx)
+	a.refreshConnectionSection()
 
 	a.setOverallIcon(sources)
 }
@@ -163,6 +201,9 @@ func (a *App) setOverallIcon(sources []domain.SyncSource) {
 }
 
 func (a *App) onExit() {
+	if a.stopWatch != nil {
+		a.stopWatch()
+	}
 	a.logger.Info("tray exited")
 }
 

@@ -3,6 +3,7 @@ module go-sync-status-client
 go 1.27
 
 require (
+	github.com/coder/websocket v1.8.15
 	github.com/gen2brain/beeep v0.11.2
 	github.com/getlantern/systray v1.2.2
 	github.com/samber/do/v2 v2.1.0
