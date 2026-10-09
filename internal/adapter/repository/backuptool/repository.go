@@ -183,8 +183,17 @@ func toSyncTarget(t targetSnapshot) domain.SyncTarget {
 	return domain.SyncTarget{
 		ID:    t.Server + ":" + t.Bucket,
 		Label: fmt.Sprintf("%s (%s)", t.Server, t.Kind),
-		State: toSyncState(t.State),
+		State: toTargetState(t.State),
 	}
+}
+
+// toTargetState is toSyncState for a single target, except that incomplete
+// stays distinguishable from failed instead of folding into Error.
+func toTargetState(s runState) domain.SyncState {
+	if s == runStateIncomplete {
+		return domain.SyncStateIncomplete
+	}
+	return toSyncState(s)
 }
 
 // toSyncState maps the backend's five-state RunState onto the tray's

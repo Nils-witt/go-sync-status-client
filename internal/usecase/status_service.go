@@ -63,6 +63,8 @@ func OverallStateOf(sources []domain.SyncSource) domain.SyncState {
 	rank := func(s domain.SyncState) int {
 		switch s {
 		case domain.SyncStateError:
+			return 5
+		case domain.SyncStateIncomplete:
 			return 4
 		case domain.SyncStateSyncing:
 			return 3

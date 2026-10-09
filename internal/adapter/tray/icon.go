@@ -39,7 +39,7 @@ func stateColor(state domain.SyncState) color.RGBA {
 		return color.RGBA{R: 0x2e, G: 0xcc, B: 0x71, A: 0xff} // green
 	case domain.SyncStateSyncing:
 		return color.RGBA{R: 0x34, G: 0x98, B: 0xdb, A: 0xff} // blue
-	case domain.SyncStatePaused:
+	case domain.SyncStatePaused, domain.SyncStateIncomplete:
 		return color.RGBA{R: 0xf3, G: 0x9c, B: 0x12, A: 0xff} // orange
 	case domain.SyncStateError:
 		return color.RGBA{R: 0xe7, G: 0x4c, B: 0x3c, A: 0xff} // red

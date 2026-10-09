@@ -16,6 +16,10 @@ const (
 	SyncStateSyncing
 	SyncStatePaused
 	SyncStateError
+	// SyncStateIncomplete means a run finished but only partly succeeded.
+	// Currently only reported for SyncTargets; a source whose run was
+	// incomplete is reported as SyncStateError.
+	SyncStateIncomplete
 )
 
 func (s SyncState) String() string {
@@ -28,6 +32,8 @@ func (s SyncState) String() string {
 		return "Paused"
 	case SyncStateError:
 		return "Error"
+	case SyncStateIncomplete:
+		return "Incomplete"
 	default:
 		return "Unknown"
 	}
@@ -44,6 +50,8 @@ func (s SyncState) Symbol() string {
 		return "⏸"
 	case SyncStateError:
 		return "✕"
+	case SyncStateIncomplete:
+		return "◐"
 	default:
 		return "?"
 	}
