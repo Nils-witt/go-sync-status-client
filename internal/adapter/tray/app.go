@@ -26,7 +26,9 @@ type App struct {
 	stopWatch context.CancelFunc
 
 	sourceItems map[string]*systray.MenuItem
-	targetItems map[string]*systray.MenuItem
+	// lastRunItems is keyed by source ID, like sourceItems.
+	lastRunItems map[string]*systray.MenuItem
+	targetItems  map[string]*systray.MenuItem
 	// receiverServerItems is keyed by server name; receiverItems by
 	// receiverKey.
 	receiverServerItems map[string]*systray.MenuItem
@@ -60,6 +62,7 @@ func NewApp(service *usecase.StatusService, receiverService *usecase.ReceiverSer
 		logger:              logger,
 		refreshInterval:     refreshInterval,
 		sourceItems:         make(map[string]*systray.MenuItem),
+		lastRunItems:        make(map[string]*systray.MenuItem),
 		targetItems:         make(map[string]*systray.MenuItem),
 		receiverServerItems: make(map[string]*systray.MenuItem),
 		receiverItems:       make(map[string]*systray.MenuItem),
@@ -98,7 +101,9 @@ func (a *App) onReady() {
 		// item.Disable() // informational row, not an action
 		a.sourceItems[src.ID] = item
 		a.sourceStates[src.ID] = src.State
-		item.AddSubMenuItem(fmt.Sprintf("%s (last run: %s)", src.State, formatLastRun(src.UpdatedAt)), "").Disable()
+		lastRun := item.AddSubMenuItem(lastRunLabel(src), "")
+		lastRun.Disable()
+		a.lastRunItems[src.ID] = lastRun
 
 		for _, tgt := range src.Targets {
 			sub := item.AddSubMenuItem(targetLabel(tgt), "")
@@ -188,6 +193,9 @@ func (a *App) refresh(ctx context.Context) {
 		}
 		item.SetTitle(menuLabel(src, multi))
 		item.SetTooltip(src.Detail)
+		if lastRun, ok := a.lastRunItems[src.ID]; ok {
+			lastRun.SetTitle(lastRunLabel(src))
+		}
 
 		for _, tgt := range src.Targets {
 			a.notifyTargetTransition(src, tgt, multi)
@@ -245,6 +253,10 @@ func displayName(src domain.SyncSource, multi bool) string {
 
 func menuLabel(src domain.SyncSource, multi bool) string {
 	return fmt.Sprintf("%s %s", src.State.Symbol(), displayName(src, multi))
+}
+
+func lastRunLabel(src domain.SyncSource) string {
+	return fmt.Sprintf("%s (last run: %s)", src.State, formatLastRun(src.UpdatedAt))
 }
 
 // formatLastRun renders a source's UpdatedAt for display in a menu label.
