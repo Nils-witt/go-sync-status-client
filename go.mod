@@ -4,7 +4,7 @@ go 1.27
 
 require (
 	github.com/coder/websocket v1.8.15
-	github.com/gen2brain/beeep v0.11.3
+	github.com/gen2brain/beeep v0.12.0
 	github.com/getlantern/systray v1.2.2
 	github.com/samber/do/v2 v2.1.0
 	golang.org/x/sys v0.50.0
@@ -13,6 +13,7 @@ require (
 require (
 	git.sr.ht/~jackmordaunt/go-toast v1.1.2 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/ebitengine/purego v0.10.2 // indirect
 	github.com/esiqveland/notify v0.13.3 // indirect
 	github.com/getlantern/context v0.0.0-20220418194847-3d5e7a086201 // indirect
 	github.com/getlantern/errors v1.0.4 // indirect
@@ -25,8 +26,6 @@ require (
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/go-stack/stack v1.8.1 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
-	github.com/jackmordaunt/icns/v3 v3.0.1 // indirect
-	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
 	github.com/oxtoacart/bpool v0.0.0-20190530202638-03653db5a59c // indirect
 	github.com/samber/go-type-to-string v1.8.0 // indirect
 	github.com/sergeymakinen/go-bmp v1.0.0 // indirect
